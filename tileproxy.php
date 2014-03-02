@@ -1,54 +1,66 @@
 <?php
-/*  cloudmade caching proxy / tileproxy.php
-    Copyright (C) 2014, Rainer Bendig (@mrbendig)
+/**
+ * Cloudmade-Caching-Proxy
+ *
+ * A small script that respects German Privacy Laws. Just get the tiles over this
+ * script, and cloudmade will never get your visitors ip address or location.
+ *
+ * Using this script with cloudmade requires a cloudmade account / api key,
+ * and a cloudmade style id.
+ *
+ * @category OSM_Proxy
+ * @package  Cloudmade-Caching-Proxy
+ * @author   Rainer Bendig <mrbendig@mrbendig.com>
+ * @license  http://www.gnu.org/licenses/gpl-2.0.html GNU General Public License 2.0
+ * @version  1.0
+ * @link     https://github.com/mrbendig/cloudmade-caching-proxy/blob/master/tileproxy.php
+ */
 
-    This program is free software; you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 2 of the License, or
-    (at your option) any later version.
+$cloudmadeApikKy = "";
+$cloudmadeStyle = "";
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+// Caching cloudmade tiles may conflict with using terms.
+$maxCachingTime=60*60*24*2;
 
-    You should have received a copy of the GNU General Public License along
-    with this program; if not, write to the Free Software Foundation, Inc.,
-    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/
-
-$cloudmadeapikey = "";
-$cloudmadestyle = "";
-$maxage=60*60*24*2;
-
-$url = "http://%s.tile.cloudmade.com/%s/%s/256/%s/%s/%s.png";
-$path = __DIR__."/tiles/%s_%s_%s_%s.png";
+$cloudmadeTileUrl = "http://%s.tile.cloudmade.com/%s/%s/256/%s/%s/%s.png";
+$cacheFilePath = __DIR__."/tiles/%s_%s_%s_%s.png";
 
 $s = $_GET["s"];
-$x = $_GET["x"];
-$y = $_GET["y"];
-$z = $_GET["z"];
+$x = (is_numeric($_GET["x"]) ? $_GET["x"] : 0);
+$y = (is_numeric($_GET["y"]) ? $_GET["y"] : 0);
+$z = (is_numeric($_GET["z"]) ? $_GET["z"] : 0);
 
+// build the caching path
+$fullCacheFilePath = sprintf($cacheFilePath, $s, $z, $x, $y);
 
-$fullpath = sprintf($path,$s,$z,$x,$y);
+/////////////////////////////////////////////////////////////////////////
+// check if file does not exist, or if it's aged if so fetch a new one //
+/////////////////////////////////////////////////////////////////////////
+if (!file_exists($fullCacheFilePath) || (time()-filemtime($fullCacheFilePath) >= $maxCachingTime) ) {
 
-// check if file does not exist, or if it's aged if so fetch a new one
-if(!file_exists($fullpath) || (time()-filemtime($fullpath) >= $maxage))
-{
-	set_time_limit(0);
+    /////////////////////////////////////////////////////////////////////////
+    // enhance timeouts, for the case if cloudmade is responding too slow. //
+    /////////////////////////////////////////////////////////////////////////
+    set_time_limit(0);
 
-	$options = array(
-	  CURLOPT_FILE    => fopen ($fullpath, 'w+'),
-	  CURLOPT_URL     => sprintf($url,$s,$cloudmadeapikey,$cloudmadestyle,$z,$x,$y)
-	);
+    $curlOptions = array(
+        CURLOPT_FILE => fopen($fullCacheFilePath, 'w+'),
+        CURLOPT_URL => sprintf($cloudmadeTileUrl, $s, $cloudmadeApiKey, $cloumadeStyle, $z, $x, $y)
+    );
 
-	$ch = curl_init();
-	curl_setopt_array($ch, $options);
-	curl_exec($ch);
+    ///////////////////////////////
+    //Download and save the tile //
+    ///////////////////////////////
+    $curlHandler = curl_init();
+    curl_setopt_array($curlHandler, $curlOptions);
+    curl_exec($curlHandler);
+    curl_close($curlHandler);
 }
 
-// display the image
-$im = imagecreatefrompng($fullpath);
+///////////////////////
+// display the image //
+///////////////////////
+$createdImage = imagecreatefrompng($fullCacheFilePath);
 header('Content-Type: image/png');
-imagepng($im);
-imagedestroy($im);
+imagepng($createdImage);
+imagedestroy($createdImage);
